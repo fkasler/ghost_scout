@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain Details - Ghost Scout</title>
+    <script src="/resources/js/alpine.min.js" defer></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link href="/resources/css/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/resources/css/main.css">
+</head>
+
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8" x-data="domainDetailsApp()">
+        <nav class="mb-6">
+            <a href="/" class="text-blue-500 hover:text-blue-700">← Back to Dashboard</a>
+        </nav>
+
+        <div x-show="loading" class="flex justify-center items-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        </div>
+
+        <div x-show="!loading && domainData">
+            <header class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-800" x-text="'Domain: ' + (domainData ? domainData.name : '')">
+                </h1>
+                <p class="text-gray-600">Details and target contacts</p>
+            </header>
+
+            <div class="bg-white shadow rounded-lg p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Domain Information</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500">MX Records</p>
+                        <p class="text-gray-800 break-words"
+                            x-text="domainData ? (domainData.mx || 'None found') : 'None found'"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">SPF Record</p>
+                        <p class="text-gray-800 break-words"
+                            x-text="domainData ? (domainData.spf || 'None found') : 'None found'"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">DMARC Record</p>
+                        <p class="text-gray-800 break-words"
+                            x-text="domainData ? (domainData.dmarc || 'None found') : 'None found'"></p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Email Format</p>
+                        <p class="text-gray-800"
+                            x-text="domainData ? (domainData.email_format || 'Unknown') : 'Unknown'"></p>
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <button @click="domainData ? startRecon(domainData.name) : null"
+                        class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 focus:outline-none">
+                        Start New Recon
+                    </button>
+                    <button @click="scrapeAllSources()"
+                        class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 focus:outline-none">
+                        Scrape All Sources
+                    </button>
+                    <button @click="generateAllProfiles()"
+                        class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-700 focus:outline-none">
+                        Generate All Profiles
+                    </button>
+                    <button @click="generateAllPretexts()"
+                        class="bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-700 focus:outline-none">
+                        Generate All Pretexts
+                    </button>
+                    <div class="mb-4 flex justify-end">
+                        <a :href="'/pretexts/' + domainName"
+                            class="text-indigo-500 hover:text-indigo-700 inline-flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            View Pretexts
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white shadow rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">Target Contacts</h2>
+
+                <div x-show="targets.length === 0" class="text-center py-8 text-gray-500">
+                    No contacts found for this domain. Start reconnaissance to find potential contacts.
+                </div>
+
+                <div x-show="targets.length > 0">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th
+                                        class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Name
+                                    </th>
+                                    <th
+                                        class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Email
+                                    </th>
+                                    <th
+                                        class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Tenure
+                                    </th>
+                                    <th
+                                        class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                    <th
+                                        class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Sources
+                                    </th>
+                                    <th
+                                        class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <template x-for="target in targets" :key="target.email">
+                                    <tr>
+                                        <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900"
+                                            x-text="target.name || 'Unknown'"></td>
+                                        <td class="px-4 py-2 text-sm text-gray-500" x-text="target.email"></td>
+                                        <td class="px-4 py-2 text-sm text-gray-500"
+                                            x-text="formatTenure(target.tenure_start)"></td>
+                                        <td class="px-4 py-2 text-sm">
+                                            <span x-show="target.status === 'pending'"
+                                                class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">Pending</span>
+                                            <span x-show="target.status === 'enriched'"
+                                                class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Enriched</span>
+                                            <span x-show="target.status === 'complete'"
+                                                class="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Complete</span>
+                                            <span x-show="target.status === 'failed'"
+                                                class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Failed</span>
+                                        </td>
+                                        <td class="px-4 py-2 text-sm text-gray-500"
+                                            x-text="target.sourceCount + ' source(s)'"></td>
+                                        <td class="px-4 py-2 whitespace-nowrap text-sm flex gap-2">
+                                            <button @click="viewTargetDetails(target.email)"
+                                                class="text-blue-500 hover:text-blue-700">
+                                                View Details
+                                            </button>
+                                            <button @click="scrapeSourcesForTarget(target.email)"
+                                                class="text-green-500 hover:text-green-700"
+                                                x-show="target.status !== 'complete'">
+                                                Scrape Sources
+                                            </button>
+                                            <button x-show="target.status === 'enriched'"
+                                                @click="generateProfile(target.email)"
+                                                class="text-purple-500 hover:text-purple-700">
+                                                Generate Profile
+                                            </button>
+                                            <button x-show="target.status === 'complete'"
+                                                @click="generatePretext(target.email)"
+                                                class="text-indigo-500 hover:text-indigo-700">
+                                                Generate Pretext
+                                            </button>
+
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="selectedTarget"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40">
+                <div class="bg-white rounded-lg max-w-2xl w-full max-h-screen overflow-y-auto p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold" x-text="selectedTarget ? selectedTarget.name : ''"></h3>
+                        <div class="flex items-center">
+                            <button @click="scrapeSourcesForTarget(selectedTarget ? selectedTarget.email : '')"
+                                class="text-green-500 hover:text-green-700 mr-4" title="Scrape Sources"
+                                x-show="selectedTarget && selectedTarget.status !== 'complete'">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                            </button>
+                            <button @click="deleteTarget()" class="text-red-500 hover:text-red-700 mr-4"
+                                title="Delete Target">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                            <button @click="generateProfile(selectedTarget ? selectedTarget.email : '')"
+                                x-show="selectedTarget && selectedTarget.status === 'enriched'"
+                                class="text-purple-500 hover:text-purple-700 mr-4" title="Generate Profile">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                            </button>
+                            <button @click="generatePretext(selectedTarget ? selectedTarget.email : '')"
+                                x-show="selectedTarget && selectedTarget.status === 'complete'"
+                                class="text-indigo-500 hover:text-indigo-700 mr-4" title="Generate Pretext">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                            </button>
+                            <button @click="selectedTarget = null" class="text-gray-500 hover:text-gray-700"
+                                title="Close">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                    stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="text-sm text-gray-500">Email</p>
+                        <p class="text-gray-800 mb-4" x-text="selectedTarget ? selectedTarget.email : ''"></p>
+
+                        <div x-show="selectedTarget && selectedTarget.status">
+                            <p class="text-sm text-gray-500">Status</p>
+                            <p class="text-gray-800 mb-4">
+                                <span x-show="selectedTarget && selectedTarget.status === 'pending'"
+                                    class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">Pending</span>
+                                <span x-show="selectedTarget && selectedTarget.status === 'enriched'"
+                                    class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Enriched</span>
+                                <span x-show="selectedTarget && selectedTarget.status === 'complete'"
+                                    class="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Complete</span>
+                                <span x-show="selectedTarget && selectedTarget.status === 'failed'"
+                                    class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Failed</span>
+                            </p>
+                        </div>
+
+                        <p class="text-sm text-gray-500">Profile</p>
+                        <div class="text-gray-800 mb-4 whitespace-pre-line"
+                            x-text="selectedTarget && selectedTarget.profile ? selectedTarget.profile : 'No profile information available'">
+                        </div>
+
+                        <p class="text-sm text-gray-500">Tenure</p>
+                        <p class="text-gray-800 mb-4"
+                            x-text="selectedTarget ? formatTenure(selectedTarget.tenure_start, true) : ''">
+                        </p>
+
+                        <div x-show="selectedTargetSources.length > 0">
+                            <h4 class="font-medium mb-2">Sources</h4>
+                            <ul class="space-y-2">
+                                <template x-for="source in selectedTargetSources" :key="source.id">
+                                    <li class="border rounded p-3">
+                                        <div class="flex justify-between">
+                                            <a :href="source.url" target="_blank"
+                                                class="text-blue-500 hover:text-blue-700 break-all"
+                                                x-text="source.url"></a>
+                                            <span x-text="source.discovery_method"
+                                                class="text-xs bg-gray-100 px-2 py-1 rounded ml-2"></span>
+                                        </div>
+                                        <p class="text-sm text-gray-500 mt-1">
+                                            <span x-text="'Status: ' + source.status"></span>
+                                            <span x-if="source.data && source.data.extracted_on"
+                                                x-text="' | First seen: ' + formatDate(source.data.extracted_on)"
+                                                class="ml-2"></span>
+                                        </p>
+                                        <!-- Source content preview section -->
+                                        <div x-show="source.status === 'mined' && source.data"
+                                            class="mt-2 border-t pt-2">
+                                            <p class="text-xs text-gray-500"
+                                                x-show="source.data && source.data.scrapedAt">
+                                                Scraped: <span x-text="formatDate(source.data.scrapedAt)"></span>
+                                            </p>
+                                            <button @click="toggleSourceContent(source.id)"
+                                                class="text-xs text-blue-500 mt-1">
+                                                <span
+                                                    x-text="expandedSourceId === source.id ? 'Hide Content Preview' : 'Show Content Preview'"></span>
+                                            </button>
+                                            <div x-show="expandedSourceId === source.id"
+                                                class="mt-2 p-2 bg-gray-50 rounded text-xs max-h-40 overflow-y-auto">
+                                                <p class="text-xs text-gray-500 mb-1"
+                                                    x-show="source.data && source.data.contentType">
+                                                    Content Type: <span x-text="source.data.contentType"></span>
+                                                </p>
+                                                <p x-show="source.data && source.data.content"
+                                                    x-text="typeof source.data.content === 'string' ? source.data.content.substring(0, 300) + '...' : 'Content preview not available'">
+                                                </p>
+                                                <p x-show="!source.data || !source.data.content"
+                                                    class="italic text-gray-500">No content available</p>
+                                            </div>
+                                        </div>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+
+                        <div x-show="selectedTargetSources.length === 0" class="text-center py-4 text-gray-500">
+                            No sources found for this contact.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delete Confirmation Modal -->
+            <div x-show="showDeleteConfirmation"
+                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white rounded-lg p-6 max-w-md w-full">
+                    <h3 class="text-xl font-semibold mb-4">Confirm Deletion</h3>
+                    <p class="mb-6">Are you sure you want to delete <span class="font-semibold"
+                            x-text="selectedTarget ? selectedTarget.email : ''"></span>? This action cannot be undone.
+                    </p>
+                    <div class="flex justify-end space-x-3">
+                        <button @click="showDeleteConfirmation = false"
+                            class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100">
+                            Cancel
+                        </button>
+                        <button @click="confirmDelete()"
+                            class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="showPromptModal"
+            class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-md w-full">
+                <h3 class="text-xl font-semibold mb-4">Select Pretext Template</h3>
+                <p class="mb-6" x-text="promptModalText"></p>
+
+                <div x-show="loadingPrompts" class="flex justify-center my-4">
+                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                </div>
+
+                <div x-show="!loadingPrompts && prompts.length === 0" class="text-center py-4 text-gray-500">
+                    No pretext templates available.
+                </div>
+
+                <div x-show="!loadingPrompts && prompts.length > 0" class="mb-6">
+                    <div class="space-y-2">
+                        <template x-for="prompt in prompts" :key="prompt.id">
+                            <div class="border rounded p-3 cursor-pointer hover:bg-gray-50"
+                                @click="selectPrompt(prompt.id)">
+                                <p class="font-medium" x-text="prompt.name"></p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3">
+                    <button @click="showPromptModal = false"
+                        class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="!loading && !domainData" class="bg-white shadow rounded-lg p-6 text-center">
+            <p class="text-gray-700">Domain not found. Please check the URL and try again.</p>
+            <a href="/" class="mt-4 inline-block bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Return to
+                Dashboard</a>
+        </div>
+
+        <!-- Status messages -->
+        <div x-show="reconStatus.length > 0" class="mt-6 bg-white shadow rounded-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">Reconnaissance Status</h2>
+            <div class="space-y-2">
+                <template x-for="(status, index) in reconStatus" :key="index">
+                    <div class="p-2 rounded bg-blue-100 text-sm text-gray-700" x-text="status"></div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function domainDetailsApp() {
+            return {
+                domainName: '',
+                domainData: null,
+                targets: [],
+                loading: true,
+                reconStatus: [],
+                socket: null,
+                selectedTarget: null,
+                selectedTargetSources: [],
+                showDeleteConfirmation: false,
+                expandedSourceId: null,
+                prompts: [],
+                loadingPrompts: false,
+                showPromptModal: false,
+                promptModalText: '',
+                selectedTargetEmail: null,
+                generateAllTargets: false,
+
+                init() {
+                    // Extract domain name from URL
+                    const urlParts = window.location.pathname.split('/');
+                    this.domainName = urlParts[urlParts.length - 1];
+
+                    // Connect socket for real-time updates
+                    this.connectSocket();
+
+                    // Load domain data
+                    this.loadDomainData();
+                },
+
+                connectSocket() {
+                    this.socket = io();
+
+                    this.socket.on('pretextGenerated', (data) => {
+                        if (data && data.email) {
+                            this.reconStatus.unshift(`Pretext generated for ${data.email}: "${data.subject}"`);
+                        }
+                    });
+
+                    this.socket.on('reconUpdate', (data) => {
+                        if (data && data.message) {
+                            this.reconStatus.push(data.message);
+                        }
+                    });
+
+                    this.socket.on('reconComplete', (data) => {
+                        if (data && data.domain === this.domainName) {
+                            this.reconStatus.push(`Completed reconnaissance for ${data.domain}. Found ${data.targetsCount} potential contacts.`);
+                            this.loadTargets(); // Refresh targets list
+                        }
+                    });
+
+                    this.socket.on('domainUpdated', (data) => {
+                        if (data && data.domain === this.domainName) {
+                            this.loadDomainData(); // Refresh domain data
+                        }
+                    });
+
+                    this.socket.on('targetDeleted', (data) => {
+                        if (data && data.domain === this.domainName) {
+                            this.reconStatus.unshift(`Target ${data.email} has been deleted.`);
+                            this.loadTargets(); // Refresh targets list
+                        }
+                    });
+
+                    this.socket.on('sourceMined', (data) => {
+                        if (data && data.targetEmail) {
+                            this.reconStatus.unshift(`Source for ${data.targetEmail} has been mined.`);
+                            // Refresh target details if currently viewing
+                            if (this.selectedTarget && this.selectedTarget.email === data.targetEmail) {
+                                this.viewTargetDetails(data.targetEmail);
+                            }
+                            // Also refresh targets list to update status counts
+                            this.loadTargets();
+                        }
+                    });
+                    this.socket.on('targetStatusUpdated', (data) => {
+                        if (data && data.email) {
+                            // Add a status message
+                            this.reconStatus.unshift(`Target ${data.email} status updated to: ${data.status}`);
+
+                            // Update the target in the targets array if it exists
+                            const targetIndex = this.targets.findIndex(t => t.email === data.email);
+                            if (targetIndex !== -1) {
+                                this.targets[targetIndex].status = data.status;
+
+                                // If this target is currently selected in the modal, update it there too
+                                if (this.selectedTarget && this.selectedTarget.email === data.email) {
+                                    this.selectedTarget.status = data.status;
+                                }
+                            } else {
+                                // If the target isn't in our current list, refresh the whole list
+                                this.loadTargets();
+                            }
+                        }
+                    });
+                    this.socket.on('profileGenerated', (data) => {
+                        if (data && data.email) {
+                            this.reconStatus.unshift(`Profile generated for ${data.email}`);
+
+                            // Refresh target details if currently viewing
+                            if (this.selectedTarget && this.selectedTarget.email === data.email) {
+                                this.viewTargetDetails(data.email);
+                            }
+
+                            // Also refresh targets list to update status
+                            this.loadTargets();
+                        }
+                    });
+                },
+                async loadPrompts() {
+                    this.loadingPrompts = true;
+                    try {
+                        const response = await fetch('/api/prompts');
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.prompts = data.prompts || [];
+                        } else {
+                            console.error('Error loading prompts:', data.error);
+                            this.prompts = [];
+                        }
+                    } catch (error) {
+                        console.error('Error loading prompts:', error);
+                        this.prompts = [];
+                    } finally {
+                        this.loadingPrompts = false;
+                    }
+                },
+                // Open prompt selection modal for a single target
+                generatePretext(email) {
+                    if (!email) return;
+
+                    this.selectedTargetEmail = email;
+                    this.generateAllTargets = false;
+
+                    // Find the target name
+                    const target = this.targets.find(t => t.email === email);
+                    const targetName = target ? target.name : email;
+
+                    this.promptModalText = `Select a template to generate a pretext for ${targetName}`;
+
+                    // Load prompts and show modal
+                    this.loadPrompts();
+                    this.showPromptModal = true;
+                },
+
+                // Open prompt selection modal for all complete targets
+                generateAllPretexts() {
+                    // Count complete targets
+                    const completeTargets = this.targets.filter(t => t.status === 'complete');
+
+                    if (completeTargets.length === 0) {
+                        this.reconStatus.unshift('No complete targets available for pretext generation.');
+                        return;
+                    }
+
+                    this.selectedTargetEmail = null;
+                    this.generateAllTargets = true;
+
+                    this.promptModalText = `Select a template to generate pretexts for all ${completeTargets.length} complete targets`;
+
+                    // Load prompts and show modal
+                    this.loadPrompts();
+                    this.showPromptModal = true;
+                },
+
+                // Handle prompt selection
+                async selectPrompt(promptId) {
+                    try {
+                        this.showPromptModal = false;
+
+                        if (this.generateAllTargets) {
+                            // Generate pretexts for all complete targets
+                            const completeTargets = this.targets
+                                .filter(t => t.status === 'complete')
+                                .map(t => t.email);
+
+                            if (completeTargets.length === 0) {
+                                this.reconStatus.unshift('No complete targets available for pretext generation.');
+                                return;
+                            }
+
+                            this.reconStatus.unshift(`Queuing pretext generation for ${completeTargets.length} targets...`);
+
+                            const response = await fetch('/api/targets/generate-pretexts', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    targetEmails: completeTargets,
+                                    promptId: promptId,
+                                    domainName: this.domainName
+                                })
+                            });
+
+                            const data = await response.json();
+
+                            if (data.success) {
+                                this.reconStatus.unshift(`Queued pretext generation for ${data.count} targets.`);
+                            } else {
+                                console.error('Error generating pretexts:', data.error);
+                                this.reconStatus.unshift(`Error generating pretexts: ${data.error}`);
+                            }
+                        } else if (this.selectedTargetEmail) {
+                            // Generate pretext for a single target
+                            this.reconStatus.unshift(`Queuing pretext generation for ${this.selectedTargetEmail}...`);
+
+                            const response = await fetch('/api/target/generate-pretext', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    email: this.selectedTargetEmail,
+                                    promptId: promptId
+                                })
+                            });
+
+                            const data = await response.json();
+
+                            if (data.success) {
+                                this.reconStatus.unshift(`Queued pretext generation for ${this.selectedTargetEmail}.`);
+                            } else {
+                                console.error('Error generating pretext:', data.error);
+                                this.reconStatus.unshift(`Error generating pretext: ${data.error}`);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error in pretext generation:', error);
+                        this.reconStatus.unshift(`Error in pretext generation: ${error.message}`);
+                    }
+                },
+
+                async loadDomainData() {
+                    try {
+                        const response = await fetch(`/api/domain/${encodeURIComponent(this.domainName)}`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.success && data.domain) {
+                            this.domainData = data.domain;
+                            // After loading domain data, load targets
+                            this.loadTargets();
+                        } else {
+                            this.domainData = null;
+                            console.error('Domain data not found:', data.error || 'Unknown error');
+                        }
+                    } catch (error) {
+                        console.error('Error loading domain data:', error);
+                        this.domainData = null;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async loadTargets() {
+                    if (!this.domainName || !this.domainData) return;
+
+                    try {
+                        const response = await fetch(`/api/domain/${encodeURIComponent(this.domainName)}/targets`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.targets = data.targets || [];
+                        } else {
+                            console.error('Error loading targets:', data.error);
+                            this.targets = [];
+                        }
+                    } catch (error) {
+                        console.error('Error loading targets:', error);
+                        this.targets = [];
+                    }
+                },
+
+                startRecon(domain) {
+                    this.reconStatus = [`Starting reconnaissance for ${domain}...`];
+
+                    // Call the API directly instead of emitting a socket event
+                    fetch(`/api/recon/start`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ domain }),
+                    })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.success) {
+                                this.reconStatus.push(`Initiated reconnaissance for ${domain}.`);
+                            } else {
+                                this.reconStatus.push(`Error starting reconnaissance: ${data.error}`);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error starting recon:', error);
+                            this.reconStatus.push(`Error starting reconnaissance: ${error.message}`);
+                        });
+                },
+
+                async viewTargetDetails(email) {
+                    if (!email) return;
+
+                    try {
+                        // Get target details
+                        const response = await fetch(`/api/target/${encodeURIComponent(email)}`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.selectedTarget = data.target;
+
+                            // Parse the JSON data for each source if it's a string
+                            this.selectedTargetSources = (data.sources || []).map(source => {
+                                if (source.data && typeof source.data === 'string') {
+                                    try {
+                                        source.data = JSON.parse(source.data);
+                                    } catch (e) {
+                                        console.error('Error parsing source data JSON:', e);
+                                        // Keep the original string if parsing fails
+                                        source.data = { content: source.data };
+                                    }
+                                }
+                                return source;
+                            });
+                        } else {
+                            console.error('Error loading target details:', data.error);
+                        }
+                    } catch (error) {
+                        console.error('Error loading target details:', error);
+                    }
+                },
+
+                deleteTarget() {
+                    if (!this.selectedTarget) return;
+                    this.showDeleteConfirmation = true;
+                },
+
+                async confirmDelete() {
+                    if (!this.selectedTarget) return;
+
+                    try {
+                        const email = this.selectedTarget.email;
+                        const response = await fetch(`/api/target/${encodeURIComponent(email)}`, {
+                            method: 'DELETE',
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            // Close modals
+                            this.showDeleteConfirmation = false;
+                            this.selectedTarget = null;
+
+                            // Refresh targets list
+                            this.loadTargets();
+
+                            // Add status message
+                            this.reconStatus.unshift(`Target ${email} has been successfully deleted.`);
+                        } else {
+                            console.error('Error deleting target:', data.error);
+                            this.reconStatus.unshift(`Error deleting target: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error('Error deleting target:', error);
+                        this.reconStatus.unshift(`Error deleting target: ${error.message}`);
+                    }
+                },
+
+                formatTenure(tenureDate, detailed = false) {
+                    if (!tenureDate) return 'Unknown';
+
+                    const date = new Date(tenureDate);
+
+                    // Basic validation
+                    if (isNaN(date.getTime())) return 'Unknown';
+
+                    const now = new Date();
+                    const years = now.getFullYear() - date.getFullYear();
+                    const months = now.getMonth() - date.getMonth();
+                    const totalMonths = (years * 12) + months;
+
+                    // Format date for display
+                    const formattedDate = date.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+
+                    if (detailed) {
+                        // For detailed view (in modal)
+                        if (years > 0) {
+                            return `${formattedDate} (${years} year${years !== 1 ? 's' : ''}, ${Math.abs(months)} month${Math.abs(months) !== 1 ? 's' : ''})`;
+                        } else {
+                            return `${formattedDate} (${Math.abs(totalMonths)} month${Math.abs(totalMonths) !== 1 ? 's' : ''})`;
+                        }
+                    } else {
+                        // For table view (more compact)
+                        if (years > 0) {
+                            return `${years}y ${Math.abs(months)}m`;
+                        } else {
+                            return `${Math.abs(totalMonths)}m`;
+                        }
+                    }
+                },
+
+                formatDate(dateString) {
+                    if (!dateString) return 'Unknown';
+
+                    const date = new Date(dateString);
+
+                    // Basic validation
+                    if (isNaN(date.getTime())) return dateString; // Return the original string if invalid
+
+                    return date.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                },
+
+                async scrapeSourcesForTarget(email) {
+                    if (!email) return;
+
+                    try {
+                        const response = await fetch(`/api/targets/scrape-sources`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ targetEmails: [email] })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.reconStatus.unshift(`Queued sources for scraping: ${email}`);
+                        } else {
+                            console.error('Error queuing sources for scraping:', data.error);
+                            this.reconStatus.unshift(`Error queuing sources for scraping: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error('Error queuing sources for scraping:', error);
+                        this.reconStatus.unshift(`Error queuing sources for scraping: ${error.message}`);
+                    }
+                },
+
+                async scrapeAllSources() {
+                    try {
+                        // Get all target emails for this domain
+                        const targetEmails = this.targets.map(target => target.email);
+
+                        if (targetEmails.length === 0) {
+                            this.reconStatus.unshift('No targets found to scrape sources for.');
+                            return;
+                        }
+
+                        const response = await fetch(`/api/targets/scrape-sources`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ targetEmails })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.reconStatus.unshift(`Queued ${data.count} sources for ${targetEmails.length} targets.`);
+                        } else {
+                            console.error('Error queuing sources for scraping:', data.error);
+                            this.reconStatus.unshift(`Error queuing sources for scraping: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error('Error queuing sources for scraping:', error);
+                        this.reconStatus.unshift(`Error queuing sources for scraping: ${error.message}`);
+                    }
+                },
+
+                toggleSourceContent(sourceId) {
+                    if (this.expandedSourceId === sourceId) {
+                        this.expandedSourceId = null;
+                    } else {
+                        this.expandedSourceId = sourceId;
+                    }
+                },
+
+                async generateProfile(email) {
+                    if (!email) return;
+
+                    try {
+                        this.reconStatus.unshift(`Queuing profile generation for ${email}...`);
+
+                        const response = await fetch('/api/target/generate-profile', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ email })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.reconStatus.unshift(`Profile generation for ${email} has been queued. Job ID: ${data.jobId}`);
+                        } else {
+                            console.error('Error queuing profile generation:', data.error);
+                            this.reconStatus.unshift(`Error queuing profile generation: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error('Error queuing profile generation:', error);
+                        this.reconStatus.unshift(`Error queuing profile generation: ${error.message}`);
+                    }
+                },
+
+                async generateAllProfiles() {
+                    // Find all enriched targets
+                    const enrichedTargets = this.targets.filter(target => target.status === 'enriched');
+
+                    if (enrichedTargets.length === 0) {
+                        this.reconStatus.unshift('No enriched targets found for profile generation.');
+                        return;
+                    }
+
+                    try {
+                        this.reconStatus.unshift(`Queuing profile generation for ${enrichedTargets.length} targets...`);
+
+                        const response = await fetch('/api/targets/generate-profiles', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                targetEmails: enrichedTargets.map(target => target.email),
+                                domainName: this.domainName
+                            })
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+
+                        const data = await response.json();
+
+                        if (data.success) {
+                            this.reconStatus.unshift(`Profile generation for ${data.count} targets has been queued.`);
+                        } else {
+                            console.error('Error queuing profile generation:', data.error);
+                            this.reconStatus.unshift(`Error queuing profile generation: ${data.error}`);
+                        }
+                    } catch (error) {
+                        console.error('Error queuing profile generation:', error);
+                        this.reconStatus.unshift(`Error queuing profile generation: ${error.message}`);
+                    }
+                }
+            };
+        }
+    </script>
+</body>
+
+</html>
